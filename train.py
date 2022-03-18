@@ -83,30 +83,37 @@ def train(args):
         #param.requires_grad = False
     
     from collections import OrderedDict
+    hidden_layer_0 = args.hid_0
+    hidden_layer_1 = args.hid_1
+    
     model.classifier = nn.Sequential(OrderedDict([
-        ('fc1', nn.Linear(input_size, 1024)),
+        ('fc1', nn.Linear(input_size, hidden_layer_0)),
         ('relu1', nn.ReLU()),
         ('drop_out1', nn.Dropout(0.2)),
-        ('fc2', nn.Linear(1024, 512)),
+        ('fc2', nn.Linear(args.hid_0, hidden_layer_1)),
         ('relu2', nn.ReLU()),
         ('drop_out2', nn.Dropout(0.2)),
-        ('fc3', nn.Linear(512, 102)), #We'll be using this dataset of 102 flower categories
+        ('fc3', nn.Linear(args.hid_1, len(train_data.class_to_idx))), #We'll be using this dataset of 102 flower categories
         ('output', nn.LogSoftmax(dim = 1))]))
     print(model)
+    print("hidden_layer_0: ",hidden_layer_0)
+    print("hidden_layer_1: ",hidden_layer_1)
+    print("classes", len(train_data.class_to_idx))
+    # Use GPU if it's available 
     
-    # Use GPU if it's available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'cuda' if args.gpu else 'cpu'
     model.to(device)
-    epochs = 5
+    epochs = args.epoch
+    print("device =", device)
+    print("epochs", epochs)
     steps = 0
     running_loss = 0
-    lr=0.001 #learning rate
-
+    
     #constants
     criterion = nn.NLLLoss()
     # Only train the classifier parameters, feature parameters are frozen
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    print("learning rate: ", args.lr)
     for e in range(epochs):
         model.train()    
         train_loss = 0
@@ -147,9 +154,11 @@ def train(args):
     model.class_to_idx = train_data.class_to_idx
 
     checkpoint = {'input_size': input_size,
-                'output_size': 102,
+                'output_size': len(train_data.class_to_idx),
                 'epochs': epochs,
-                'learning_rate':lr,
+                'hidden_layer_0':args.hid_0,
+                'hidden_layer_1':args.hid_1,                  
+                'learning_rate':args.lr,                
                 'batch_size': train_loader.batch_size,
                 'arch': args.arch,
                 'class_to_idx': model.class_to_idx,              
@@ -165,9 +174,13 @@ if __name__ == "__main__":
     parser.add_argument('--save_dir', type=str, default='./', help='checkpoint save trained model')
     parser.add_argument('--arch', type=str, default='./', help='vgg or densenet121')
     parser.add_argument('--data_dir', type=str, default='flowers', help='dataset directory', required=True)
-    parser.add_argument('--gpu', type=bool, default=False, help='Enable/Disable GPU')
+    parser.add_argument('--gpu', action='store_true', help='Enable/Disable GPU')
+    parser.add_argument('--hid_0', type=int, default=1024, help='Enter first hidden layer')
+    parser.add_argument('--hid_1', type=int, default=512, help='Enter second hidden layer')
+    parser.add_argument('--epoch', type=int, default=5, help='Enter number of epochs')
+    parser.add_argument('--lr', type=float, default=0.001, help='Enter learning rate')
     args = parser.parse_args()
-    
+    print(args.gpu)
     print("Training started.!")
     train(args)    
     print("Training finished successfully.!")

@@ -20,8 +20,7 @@ import random
 import os
 
 import json
-with open('cat_to_name.json', 'r') as f:
-    flower_to_name = json.load(f)
+
 
 def load_checkpoint(filepath):
     checkpoint = torch.load(filepath)
@@ -33,13 +32,13 @@ def load_checkpoint(filepath):
         
     from collections import OrderedDict
     model.classifier = nn.Sequential(OrderedDict([
-        ('fc1', nn.Linear(checkpoint['input_size'], 1024)),
+        ('fc1', nn.Linear(checkpoint['input_size'], checkpoint['hidden_layer_0'])),
         ('relu1', nn.ReLU()),
         ('drop_out1', nn.Dropout(0.2)),
-        ('fc2', nn.Linear(1024, 512)),
+        ('fc2', nn.Linear(checkpoint['hidden_layer_0'], checkpoint['hidden_layer_1'])),
         ('relu2', nn.ReLU()),
         ('drop_out2', nn.Dropout(0.2)),
-        ('fc3', nn.Linear(512, 102)), #We'll be using this dataset of 102 flower categories
+        ('fc3', nn.Linear(checkpoint['hidden_layer_1'], checkpoint['output_size'])), #We'll be using this dataset of 102 flower categories
         ('output', nn.LogSoftmax(dim = 1))]))
     
     model.class_to_idx=checkpoint['class_to_idx']
@@ -82,14 +81,21 @@ def predict(image_path, model, topk=5):
     output = model.forward(image.to(device))
     probs = torch.exp(output)    
     probs, classes = probs.topk(topk)
+        
+    idx_to_class = {val: key for key, val in model.class_to_idx.items()}    
+    classes = classes.to("cpu")
+    classes = classes.detach().numpy().tolist()[0]
+    categories = [idx_to_class[idx] for idx in classes]
     
-    return probs, classes
+    return probs, classes, categories
 
 if __name__ == "__main__":
     #get user input
     parser = argparse.ArgumentParser(description='Flowers Image Prediction.')
     parser.add_argument('--input', type=str, default='flowers/test/1/image_06743.jpg', help='path to test flower dataset.')
-    parser.add_argument('--checkpoint', type=str, default='checkpoint.pth', help='vgg or densenet121')    
+    parser.add_argument('--checkpoint', type=str, default='checkpoint.pth', help='path to the checkpoint file')
+    parser.add_argument('--gpu', action='store_true', help='Enable/Disable GPU')
+    parser.add_argument('--cat_to_name', type=str, default='cat_to_name.json', help='Path to JSON mapping file')
     args = parser.parse_args()
     
     print(args.input)
@@ -100,9 +106,17 @@ if __name__ == "__main__":
     print(model)
     print("Model loaded.!")
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = 'cuda' if args.gpu else 'cpu'
+    print("device =", device)
     model.to(device)
     
-    probs, classes = predict(args.input, model, topk=5)
+    probs, classes, categories = predict(args.input, model, topk=5)
     print("probabilty = ", probs)
-    print("classes =", classes)
+    print("classes =", classes)    
+    print("categories =", categories)
+    
+    print("cat_to_name: ", args.cat_to_name)
+    with open(args.cat_to_name, 'r') as f:
+        flower_to_name = json.load(f)
+    for c in categories:
+        print (flower_to_name[c])
